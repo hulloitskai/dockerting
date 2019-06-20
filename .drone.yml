@@ -1,0 +1,40 @@
+kind: pipeline
+name: default
+
+steps:
+  - name: info
+    image: alpine/git
+    commands:
+      - git rev-parse HEAD 2> /dev/null > /info/commit
+      - git rev-parse --abbrev-ref HEAD 2> /dev/null > /info/branch
+      - head -1 < go.mod | awk '{print $2}' 2> /dev/null > /info/module
+      - tail -n +1 /info/*
+    volumes:
+      - name: info
+        path: /info
+
+  - name: build_and_push
+    image: stevenxie/kaniko-drone
+    settings:
+      repo: stevenxie/dockerting
+      tags:
+        - $(printf "%s-%s" $(cat /i/branch) $(cat /i/commit))
+        - |
+          $([ $(cat /i/branch) == master ] && \
+             [ $DRONE_BUILD_EVENT == push ] && \
+             echo latest || true)
+      username: stevenxie
+      password:
+        from_secret: docker_pass
+    volumes:
+      - name: info
+        path: /i
+
+
+volumes:
+  - name: info
+    temp: {}
+
+trigger:
+  event:
+    exclude: ["tag"]
